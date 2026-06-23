@@ -3,6 +3,7 @@
 Backend modules use flat imports (e.g. ``from config import config``), so we
 insert the ``backend`` directory onto ``sys.path`` before any test imports.
 """
+
 import os
 import sys
 from types import SimpleNamespace
@@ -28,8 +29,16 @@ def success_results():
             "Servers expose tools, resources and prompts.",
         ],
         metadata=[
-            {"course_title": "MCP: Build Rich-Context AI Apps", "lesson_number": 1, "chunk_index": 0},
-            {"course_title": "MCP: Build Rich-Context AI Apps", "lesson_number": 2, "chunk_index": 5},
+            {
+                "course_title": "MCP: Build Rich-Context AI Apps",
+                "lesson_number": 1,
+                "chunk_index": 0,
+            },
+            {
+                "course_title": "MCP: Build Rich-Context AI Apps",
+                "lesson_number": 2,
+                "chunk_index": 5,
+            },
         ],
         distances=[0.12, 0.34],
     )
