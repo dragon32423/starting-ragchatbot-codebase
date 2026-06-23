@@ -7,6 +7,7 @@ Two layers:
     ChromaDB and the real Anthropic API. This is the diagnostic that reproduces
     the "query failed" bug and surfaces the true exception.
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,14 +40,18 @@ def test_query_returns_answer_and_sources(mock_dp, mock_vs, mock_ai, mock_sm):
     rag = RAGSystem(make_config())
     # Stand in for the search tool's recorded sources.
     rag.tool_manager.get_last_sources = MagicMock(
-        return_value=[{"text": "MCP: Build Rich-Context AI Apps - Lesson 1", "link": None}]
+        return_value=[
+            {"text": "MCP: Build Rich-Context AI Apps - Lesson 1", "link": None}
+        ]
     )
     rag.tool_manager.reset_sources = MagicMock()
 
     answer, sources = rag.query("What is MCP?", session_id="session_1")
 
     assert answer == "MCP is a protocol."
-    assert sources == [{"text": "MCP: Build Rich-Context AI Apps - Lesson 1", "link": None}]
+    assert sources == [
+        {"text": "MCP: Build Rich-Context AI Apps - Lesson 1", "link": None}
+    ]
 
 
 @patch("rag_system.SessionManager")
@@ -88,6 +93,7 @@ def test_configured_model_is_accessible():
     use. Catches the '404 model not found' failure instantly, without a full query,
     and guards against config drifting to a retired/inaccessible model id."""
     import anthropic
+
     from config import config
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)

@@ -34,7 +34,13 @@ uv run pytest backend/tests/test_rag_system.py::test_name  # single test
 uv run pytest -m "not integration"   # skip tests that hit the real Anthropic API / ChromaDB
 ```
 
-There is no lint/format command configured in this repo.
+**Code quality** (black for formatting, ruff for linting + import sorting; config in `pyproject.toml`):
+```bash
+./scripts/format.sh   # auto-fix: sort imports (ruff) + format (black)
+./scripts/lint.sh     # lint only, no file changes (ruff check)
+./scripts/check.sh    # full gate, no changes: black --check, ruff, pytest (excludes integration)
+```
+Or invoke the tools directly: `uv run black .`, `uv run ruff check . [--fix]`. Run `./scripts/format.sh` before committing; `./scripts/check.sh` is the CI-style gate.
 
 Environment: requires `ANTHROPIC_API_KEY` in a `.env` file at the repo root (loaded via `python-dotenv` in `backend/config.py`).
 

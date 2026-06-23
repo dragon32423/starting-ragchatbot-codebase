@@ -4,10 +4,11 @@ These use a mocked VectorStore, so they exercise the tool's own logic without
 touching ChromaDB or the Anthropic API. If these pass, the search/tool layer is
 sound and the "query failed" bug lives elsewhere.
 """
+
 from unittest.mock import MagicMock
 
+from search_tools import CourseOutlineTool, CourseSearchTool, ToolManager
 from vector_store import SearchResults
-from search_tools import CourseSearchTool, CourseOutlineTool, ToolManager
 
 
 # --- CourseSearchTool.execute -------------------------------------------------
@@ -112,7 +113,10 @@ def test_tool_manager_unknown_tool(mock_vector_store):
     manager = ToolManager()
     manager.register_tool(CourseSearchTool(mock_vector_store))
 
-    assert manager.execute_tool("does_not_exist", query="x") == "Tool 'does_not_exist' not found"
+    assert (
+        manager.execute_tool("does_not_exist", query="x")
+        == "Tool 'does_not_exist' not found"
+    )
 
 
 def test_tool_manager_sources_lifecycle(mock_vector_store):
@@ -141,7 +145,11 @@ def make_outline_store():
             "course_link": "https://example.com/mcp",
             "lessons": [
                 {"lesson_number": 2, "lesson_title": "Servers", "lesson_link": None},
-                {"lesson_number": 1, "lesson_title": "Introduction", "lesson_link": None},
+                {
+                    "lesson_number": 1,
+                    "lesson_title": "Introduction",
+                    "lesson_link": None,
+                },
             ],
             "lesson_count": 2,
         }

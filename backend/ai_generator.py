@@ -1,9 +1,9 @@
 import anthropic
-from typing import List, Optional, Dict, Any
+
 
 class AIGenerator:
     """Handles interactions with Anthropic's Claude API for generating responses"""
-    
+
     # Maximum number of sequential tool-executing rounds per user query.
     MAX_TOOL_ROUNDS = 2
 
@@ -33,35 +33,34 @@ All responses must be:
 4. **Example-supported** - Include relevant examples when they aid understanding
 Provide only the direct answer to what was asked.
 """
-    
+
     def __init__(self, api_key: str, model: str):
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
-        
+
         # Pre-build base API parameters
-        self.base_params = {
-            "model": self.model,
-            "temperature": 0,
-            "max_tokens": 800
-        }
-    
-    def generate_response(self, query: str,
-                         conversation_history: Optional[str] = None,
-                         tools: Optional[List] = None,
-                         tool_manager=None) -> str:
+        self.base_params = {"model": self.model, "temperature": 0, "max_tokens": 800}
+
+    def generate_response(
+        self,
+        query: str,
+        conversation_history: str | None = None,
+        tools: list | None = None,
+        tool_manager=None,
+    ) -> str:
         """
         Generate AI response with optional tool usage and conversation context.
-        
+
         Args:
             query: The user's question or request
             conversation_history: Previous messages for context
             tools: Available tools the AI can use
             tool_manager: Manager to execute tools
-            
+
         Returns:
             Generated response as string
         """
-        
+
         # Build system content efficiently - avoid string ops when possible
         system_content = (
             f"{self.SYSTEM_PROMPT}\n\nPrevious conversation:\n{conversation_history}"
@@ -134,21 +133,25 @@ Provide only the direct answer to what was asked.
                 result = tool_manager.execute_tool(
                     content_block.name, **content_block.input
                 )
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": content_block.id,
-                    "content": result,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": content_block.id,
+                        "content": result,
+                    }
+                )
             except Exception as e:
                 # A hard tool failure: feed the error back so Claude can phrase a
                 # graceful answer, and flag it so the loop stops issuing more tools.
                 had_error = True
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": content_block.id,
-                    "content": f"Tool '{content_block.name}' failed: {e}",
-                    "is_error": True,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": content_block.id,
+                        "content": f"Tool '{content_block.name}' failed: {e}",
+                        "is_error": True,
+                    }
+                )
         return tool_results, had_error
 
     def _final_synthesis(self, messages, system_content):
@@ -174,5 +177,7 @@ Provide only the direct answer to what was asked.
         ]
         if texts:
             return "\n".join(texts)
-        return ("I couldn't generate a response for that. "
-                "Please try rephrasing your question.")
+        return (
+            "I couldn't generate a response for that. "
+            "Please try rephrasing your question."
+        )

@@ -16,11 +16,45 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "black>=26.5.1",
     "pytest>=9.1.1",
+    "ruff>=0.15.18",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 markers = [
     "integration: end-to-end tests that hit the real Anthropic API and ChromaDB (deselect with '-m \"not integration\"')",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, UP: pyupgrade, B: bugbear
+select = ["E", "W", "F", "I", "UP", "B"]
+# E501 (line too long) is handled by black; ignore so ruff and black don't fight.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# app.py intentionally calls warnings.filterwarnings() before its imports to
+# silence a noisy resource_tracker warning, so module-level imports follow it.
+"backend/app.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "config",
+    "vector_store",
+    "ai_generator",
+    "rag_system",
+    "search_tools",
+    "session_manager",
+    "document_processor",
+    "models",
+    "app",
 ]
