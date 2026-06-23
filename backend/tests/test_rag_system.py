@@ -39,14 +39,14 @@ def test_query_returns_answer_and_sources(mock_dp, mock_vs, mock_ai, mock_sm):
     rag = RAGSystem(make_config())
     # Stand in for the search tool's recorded sources.
     rag.tool_manager.get_last_sources = MagicMock(
-        return_value=["MCP: Build Rich-Context AI Apps - Lesson 1"]
+        return_value=[{"text": "MCP: Build Rich-Context AI Apps - Lesson 1", "link": None}]
     )
     rag.tool_manager.reset_sources = MagicMock()
 
     answer, sources = rag.query("What is MCP?", session_id="session_1")
 
     assert answer == "MCP is a protocol."
-    assert sources == ["MCP: Build Rich-Context AI Apps - Lesson 1"]
+    assert sources == [{"text": "MCP: Build Rich-Context AI Apps - Lesson 1", "link": None}]
 
 
 @patch("rag_system.SessionManager")

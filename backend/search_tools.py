@@ -102,9 +102,11 @@ class CourseSearchTool(Tool):
             
             # Track source for the UI
             source = course_title
+            link = None
             if lesson_num is not None:
                 source += f" - Lesson {lesson_num}"
-            sources.append(source)
+                link = self.store.get_lesson_link(course_title, lesson_num)
+            sources.append({"text": source, "link": link})
             
             formatted.append(f"{header}\n{doc}")
         
@@ -186,7 +188,7 @@ class CourseOutlineTool(Tool):
             lines.append(f"  {number}. {lesson_title}")
 
         # Track source for the UI.
-        self.last_sources = [title]
+        self.last_sources = [{"text": title, "link": course_link}]
 
         return "\n".join(lines)
 

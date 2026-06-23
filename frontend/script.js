@@ -5,7 +5,7 @@ const API_URL = '/api';
 let currentSessionId = null;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, totalCourses, courseTitles;
+let chatMessages, chatInput, sendButton, totalCourses, courseTitles, newChatButton;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sendButton = document.getElementById('sendButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
+    newChatButton = document.getElementById('newChatButton');
     
     setupEventListeners();
     createNewSession();
@@ -28,7 +29,10 @@ function setupEventListeners() {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
-    
+
+    // New chat
+    newChatButton.addEventListener('click', startNewChat);
+
     
     // Suggested questions
     document.querySelectorAll('.suggested-item').forEach(button => {
@@ -122,10 +126,26 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     let html = `<div class="message-content">${displayContent}</div>`;
     
     if (sources && sources.length > 0) {
+        // Multiple chunks from the same lesson produce identical sources, so
+        // de-duplicate by text+link before rendering.
+        const seen = new Set();
+        const uniqueSources = sources.filter(s => {
+            const key = `${s.text}|${s.link || ''}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        const sourcesHtml = uniqueSources.map(s => {
+            const label = escapeHtml(s.text);
+            return s.link
+                ? `<a class="source-link" href="${s.link}" target="_blank" rel="noopener noreferrer">${label}</a>`
+                : `<span class="source-link source-link--plain">${label}</span>`;
+        }).join('');
         html += `
             <details class="sources-collapsible">
                 <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+                <div class="sources-content">${sourcesHtml}</div>
             </details>
         `;
     }
@@ -145,6 +165,25 @@ function escapeHtml(text) {
 }
 
 // Removed removeMessage function - no longer needed since we handle loading differently
+
+// Start a brand-new chat: tear down the old backend session, then reset the UI.
+async function startNewChat() {
+    if (currentSessionId) {
+        try {
+            await fetch(`${API_URL}/session/clear`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ session_id: currentSessionId })
+            });
+        } catch (error) {
+            // Backend cleanup is best-effort; still reset the UI on failure.
+            console.error('Error clearing session:', error);
+        }
+    }
+    createNewSession();
+}
 
 async function createNewSession() {
     currentSessionId = null;

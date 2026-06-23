@@ -66,8 +66,8 @@ def test_execute_populates_last_sources(mock_vector_store):
     tool.execute(query="what is MCP")
 
     assert tool.last_sources == [
-        "MCP: Build Rich-Context AI Apps - Lesson 1",
-        "MCP: Build Rich-Context AI Apps - Lesson 2",
+        {"text": "MCP: Build Rich-Context AI Apps - Lesson 1", "link": None},
+        {"text": "MCP: Build Rich-Context AI Apps - Lesson 2", "link": None},
     ]
 
 
@@ -82,7 +82,7 @@ def test_execute_handles_missing_lesson_number(mock_vector_store):
     output = tool.execute(query="intro")
 
     assert "[Some Course]" in output  # no " - Lesson N" suffix
-    assert tool.last_sources == ["Some Course"]
+    assert tool.last_sources == [{"text": "Some Course", "link": None}]
 
 
 # --- get_tool_definition ------------------------------------------------------
@@ -184,7 +184,9 @@ def test_outline_populates_last_sources():
 
     tool.execute(course_name="MCP")
 
-    assert tool.last_sources == [COURSE_TITLE]
+    assert tool.last_sources == [
+        {"text": COURSE_TITLE, "link": "https://example.com/mcp"}
+    ]
 
 
 def test_outline_unknown_course_returns_message():

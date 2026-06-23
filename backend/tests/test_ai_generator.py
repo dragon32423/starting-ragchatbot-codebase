@@ -185,3 +185,174 @@ def test_conversation_history_in_system_prompt():
     system = client.messages.create.call_args.kwargs["system"]
     assert "Previous conversation:" in system
     assert "User: hi" in system
+
+
+# --- Sequential (multi-round) tool calling --------------------------------
+
+
+def test_two_sequential_tool_rounds():
+    """Round 1 outline -> round 2 search -> final synthesis. Claude chains two
+    tools across separate API calls, reasoning about the first result."""
+    tool_manager = MagicMock()
+    tool_manager.execute_tool.side_effect = ["Lesson 4: Prompt caching", "search hits"]
+
+    generator, client = build_generator([
+        make_tool_use_response("get_course_outline", {"course_name": "MCP"}, tool_id="t1"),
+        make_tool_use_response("search_course_content", {"query": "Prompt caching"}, tool_id="t2"),
+        make_text_response("final"),
+    ])
+
+    answer = generator.generate_response(
+        query="find a course like lesson 4 of MCP",
+        tools=[{"name": "get_course_outline"}, {"name": "search_course_content"}],
+        tool_manager=tool_manager,
+    )
+
+    assert answer == "final"
+    # Three API calls: round 1, round 2, synthesis.
+    assert client.messages.create.call_count == 3
+    # Both tools executed, in order, with their respective inputs.
+    assert tool_manager.execute_tool.call_count == 2
+    tool_manager.execute_tool.assert_any_call("get_course_outline", course_name="MCP")
+    tool_manager.execute_tool.assert_any_call("search_course_content", query="Prompt caching")
+    # History accumulates across rounds: by the synthesis call the messages hold
+    # both rounds' tool_use turns and their results.
+    synthesis_messages = client.messages.create.call_args_list[2].kwargs["messages"]
+    assert [m["role"] for m in synthesis_messages] == [
+        "user", "assistant", "user", "assistant", "user"
+    ]
+
+
+def test_stops_after_two_rounds_with_final_synthesis():
+    """When Claude wants a tool in both rounds, the loop stops at the cap and the
+    3rd (synthesis) call drops tools to force a text answer."""
+    tool_manager = MagicMock()
+    tool_manager.execute_tool.return_value = "tool output"
+
+    generator, client = build_generator([
+        make_tool_use_response("search_course_content", {"query": "a"}, tool_id="t1"),
+        make_tool_use_response("search_course_content", {"query": "b"}, tool_id="t2"),
+        make_text_response("synth"),
+    ])
+
+    answer = generator.generate_response(
+        query="compare a and b",
+        tools=[{"name": "search_course_content"}],
+        tool_manager=tool_manager,
+    )
+
+    assert answer == "synth"
+    assert tool_manager.execute_tool.call_count == 2
+    third_call = client.messages.create.call_args_list[2].kwargs
+    assert "tools" not in third_call
+
+
+def test_second_round_includes_tools():
+    """The core fix: tools are offered on BOTH the first and second round (old
+    behavior removed tools on the second call)."""
+    tool_manager = MagicMock()
+    tool_manager.execute_tool.return_value = "tool output"
+    tools = [{"name": "search_course_content"}]
+
+    generator, client = build_generator([
+        make_tool_use_response("search_course_content", {"query": "a"}),
+        make_text_response("done"),
+    ])
+
+    generator.generate_response(query="q", tools=tools, tool_manager=tool_manager)
+
+    first_call = client.messages.create.call_args_list[0].kwargs
+    second_call = client.messages.create.call_args_list[1].kwargs
+    assert first_call["tools"] == tools
+    assert first_call["tool_choice"] == {"type": "auto"}
+    assert second_call["tools"] == tools
+    assert second_call["tool_choice"] == {"type": "auto"}
+
+
+def test_first_round_direct_answer():
+    """If round 1 returns no tool_use, answer immediately with a single API call."""
+    tool_manager = MagicMock()
+
+    generator, client = build_generator([make_text_response("direct")])
+
+    answer = generator.generate_response(
+        query="general knowledge",
+        tools=[{"name": "search_course_content"}],
+        tool_manager=tool_manager,
+    )
+
+    assert answer == "direct"
+    assert client.messages.create.call_count == 1
+    tool_manager.execute_tool.assert_not_called()
+
+
+def test_tool_execution_error_handled_gracefully():
+    """A tool raising must not propagate. The error is fed back as a tool_result and
+    a tools-off synthesis call produces the final answer."""
+    tool_manager = MagicMock()
+    tool_manager.execute_tool.side_effect = RuntimeError("db down")
+
+    generator, client = build_generator([
+        make_tool_use_response("search_course_content", {"query": "x"}, tool_id="t1"),
+        make_text_response("recovered"),
+    ])
+
+    answer = generator.generate_response(
+        query="x",
+        tools=[{"name": "search_course_content"}],
+        tool_manager=tool_manager,
+    )
+
+    assert answer == "recovered"
+    assert client.messages.create.call_count == 2
+    # The synthesis call drops tools and carries the error tool_result.
+    synthesis_call = client.messages.create.call_args_list[1].kwargs
+    assert "tools" not in synthesis_call
+    error_result = synthesis_call["messages"][-1]["content"][0]
+    assert error_result["is_error"] is True
+    assert "db down" in error_result["content"]
+
+
+def test_empty_synthesis_content_returns_fallback():
+    """An empty final response after two tool rounds yields the fallback, no IndexError."""
+    tool_manager = MagicMock()
+    tool_manager.execute_tool.return_value = "tool output"
+
+    generator, client = build_generator([
+        make_tool_use_response("search_course_content", {"query": "a"}, tool_id="t1"),
+        make_tool_use_response("search_course_content", {"query": "b"}, tool_id="t2"),
+        make_empty_response(),
+    ])
+
+    answer = generator.generate_response(
+        query="q",
+        tools=[{"name": "search_course_content"}],
+        tool_manager=tool_manager,
+    )
+
+    assert isinstance(answer, str) and answer.strip()
+    assert "couldn't generate a response" in answer
+
+
+def test_api_error_during_second_round():
+    """An APIError on a later round is still caught by the loop-wide handler."""
+    tool_manager = MagicMock()
+    tool_manager.execute_tool.return_value = "tool output"
+
+    api_error = anthropic.APIError(
+        "Your credit balance is too low to access the Anthropic API.",
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"),
+        body=None,
+    )
+    generator, client = build_generator([
+        make_tool_use_response("search_course_content", {"query": "x"}),
+        api_error,
+    ])
+
+    answer = generator.generate_response(
+        query="x",
+        tools=[{"name": "search_course_content"}],
+        tool_manager=tool_manager,
+    )
+
+    assert "AI service is currently unavailable" in answer

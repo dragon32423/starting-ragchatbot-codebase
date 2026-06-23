@@ -10,10 +10,10 @@ A full-stack RAG (Retrieval-Augmented Generation) system for querying course mat
 
 **Run the app** (serves frontend + API on http://localhost:8000, API docs at `/docs`):
 ```bash
-./run.sh
-# or manually:
 cd backend && uv run uvicorn app:app --reload --port 8000
 ```
+
+**Do not start the server with `./run.sh`.** Use the manual `uv run uvicorn` command above instead.
 
 **Install dependencies:**
 ```bash
