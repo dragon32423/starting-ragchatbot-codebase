@@ -5,13 +5,14 @@ class AIGenerator:
     """Handles interactions with Anthropic's Claude API for generating responses"""
     
     # Static system prompt to avoid rebuilding on each call
-    SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to a comprehensive search tool for course information.
+    SYSTEM_PROMPT = """ You are an AI assistant specialized in course materials and educational content with access to tools for course information.
 
-Search Tool Usage:
-- Use the search tool **only** for questions about specific course content or detailed educational materials
-- **One search per query maximum**
-- Synthesize search results into accurate, fact-based responses
-- If search yields no results, state this clearly without offering alternatives
+Tool Usage:
+- **search_course_content**: use for questions about specific course content or detailed educational materials
+- **get_course_outline**: use for questions about a course's outline, syllabus, or list of lessons. Report the course title, course link, and the full numbered lesson list.
+- **One tool call per query maximum**
+- Synthesize tool results into accurate, fact-based responses
+- If a tool yields no results, state this clearly without offering alternatives
 
 Response Protocol:
 - **General knowledge questions**: Answer using existing knowledge without searching
@@ -70,21 +71,26 @@ Provide only the direct answer to what was asked.
             "messages": [{"role": "user", "content": query}],
             "system": system_content
         }
-        
+
         # Add tools if available
         if tools:
             api_params["tools"] = tools
             api_params["tool_choice"] = {"type": "auto"}
-        
-        # Get response from Claude
-        response = self.client.messages.create(**api_params)
-        
-        # Handle tool execution if needed
-        if response.stop_reason == "tool_use" and tool_manager:
-            return self._handle_tool_execution(response, api_params, tool_manager)
-        
-        # Return direct response
-        return response.content[0].text
+
+        try:
+            # Get response from Claude
+            response = self.client.messages.create(**api_params)
+
+            # Handle tool execution if needed
+            if response.stop_reason == "tool_use" and tool_manager:
+                return self._handle_tool_execution(response, api_params, tool_manager)
+
+            # Return direct response
+            return self._extract_text(response)
+        except anthropic.APIError as e:
+            # Surface the real reason (auth, billing, model, rate limit) instead of
+            # letting it bubble up as an opaque HTTP 500 / "query failed".
+            return f"The AI service is currently unavailable: {e}"
     
     def _handle_tool_execution(self, initial_response, base_params: Dict[str, Any], tool_manager):
         """
@@ -132,4 +138,23 @@ Provide only the direct answer to what was asked.
         
         # Get final response
         final_response = self.client.messages.create(**final_params)
-        return final_response.content[0].text
+        return self._extract_text(final_response)
+
+    @staticmethod
+    def _extract_text(response) -> str:
+        """Safely pull the assistant's text out of a Messages response.
+
+        The API can return a response whose ``content`` is empty or contains only
+        non-text blocks (e.g. an ``end_turn`` with no text after a tool result).
+        Indexing ``content[0].text`` blindly raises IndexError in that case, which
+        previously surfaced as an opaque HTTP 500 / "query failed".
+        """
+        texts = [
+            block.text
+            for block in response.content
+            if getattr(block, "type", None) == "text"
+        ]
+        if texts:
+            return "\n".join(texts)
+        return ("I couldn't generate a response for that. "
+                "Please try rephrasing your question.")

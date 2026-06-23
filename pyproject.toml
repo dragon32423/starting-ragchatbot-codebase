@@ -13,3 +13,14 @@ dependencies = [
     "python-multipart==0.0.20",
     "python-dotenv==1.1.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+markers = [
+    "integration: end-to-end tests that hit the real Anthropic API and ChromaDB (deselect with '-m \"not integration\"')",
+]
