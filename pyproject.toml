@@ -23,8 +23,17 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",              # show a summary of all non-passing test outcomes
+    "--strict-markers", # error on unknown @pytest.mark.* instead of warning
+    "--tb=short",       # concise tracebacks
+]
 markers = [
     "integration: end-to-end tests that hit the real Anthropic API and ChromaDB (deselect with '-m \"not integration\"')",
+    "api: FastAPI HTTP-layer tests using the inline test app (no network/DB)",
 ]
 
 [tool.black]
